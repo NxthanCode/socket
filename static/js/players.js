@@ -90,8 +90,6 @@ function createPlayerCard(player) {
         </div>
         <div class="player-details">
             <div class="player-last-seen">
-                <i class="far fa-clock"></i>
-                Last seen: ${lastSeen}
             </div>
         </div>
         <div class="player-actions">
