@@ -1,7 +1,15 @@
-
+# Core Flask
 flask==2.3.3
 flask-session==0.5.0
-flask_socketio
 
+# WebSocket support with production server
+flask-socketio==5.3.4
+python-socketio==5.9.0
+python-engineio==4.4.1
+eventlet==0.33.3
 
+# Production server
+gunicorn==21.2.0
+
+# Database and utilities
 werkzeug==2.3.7
