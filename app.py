@@ -19,7 +19,10 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 Session(app)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", manage_session=False)
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*",
+                   async_mode='eventlet',
+                   manage_session=False)
 
 online_users = {}
 
