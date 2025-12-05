@@ -8,8 +8,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
-import eventlet
-eventlet.monkey_patch()
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_here_change_in_production')
