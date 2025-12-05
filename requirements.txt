@@ -1,15 +1,21 @@
 # Core Flask
-flask==2.3.3
+flask==3.0.0
+werkzeug==3.0.1
+jinja2==3.1.3
+itsdangerous==2.1.2
+click==8.1.7
+
+# Session Management
 flask-session==0.5.0
 
-# WebSocket support with production server
-flask-socketio==5.3.4
-python-socketio==5.9.0
-python-engineio==4.4.1
-eventlet==0.33.3
+# WebSocket - Compatible versions
+flask-socketio==5.3.6
+python-socketio==5.11.2
+python-engineio==4.8.0
+eventlet==0.35.1
 
 # Production server
 gunicorn==21.2.0
 
-# Database and utilities
-werkzeug==2.3.7
+# For file uploads
+secure-cookie==0.2.0
