@@ -1,19 +1,9 @@
-# Core Flask
 flask==3.0.2
 werkzeug==3.0.3
-jinja2==3.1.4
-itsdangerous==2.2.0
-click==8.1.7
-
-# Session Management
 flask-session==0.5.0
-
-# WebSocket - Use gevent instead of eventlet for Python 3.13
 flask-socketio==5.4.0
 python-socketio==5.11.3
 python-engineio==4.8.2
 gevent==24.8.0
 gevent-websocket==0.10.1
-
-# Production server
 gunicorn==22.0.0
