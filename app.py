@@ -7,6 +7,8 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+import eventlet
+eventlet.monkey_patch()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_here_change_in_production')
@@ -17,11 +19,7 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 Session(app)
 
-socketio = SocketIO(app, 
-                   cors_allowed_origins="*", 
-                   manage_session=False,
-                   logger=True,
-                   engineio_logger=True)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", manage_session=False)
 
 online_users = {}
 
