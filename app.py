@@ -8,8 +8,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
-from functools import wraps, lru_cache
-import gzip
+from functools import lru_cache
 
 
 app = Flask(__name__)
@@ -63,6 +62,15 @@ def init_db():
     )
     ''')
 
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS money (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        amount INTEGER DEFAULT 100,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -79,13 +87,6 @@ def hash_password(password):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-
-@lru_cache(maxsize=128)
-def get_cached_user(user_id):
-    conn = get_db_connection()
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-    conn.close()
-    return dict(user) if user else None
 
 @app.after_request
 def add_header(response):
@@ -117,6 +118,7 @@ def check_auth():
         conn = get_db_connection()
         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         profile = conn.execute('SELECT * FROM profiles WHERE user_id = ?', (session['user_id'],)).fetchone()
+        money = conn.execute('SELECT * FROM money WHERE user_id = ?', (session['user_id'],)).fetchone()
         conn.close()
 
         if user:
@@ -127,7 +129,8 @@ def check_auth():
                 'profile': {
                     'bio': profile['bio'] if profile else '',
                     'avatar': profile['avatar'] if profile else '/static/default-avatar.png'
-                } if profile else None
+                } if profile else None,
+                'money': money['amount'] if money else 100
             })
 
     return jsonify({'authenticated': False})
@@ -182,6 +185,9 @@ def register():
 
         cursor.execute('INSERT INTO profiles (user_id, bio, avatar) VALUES (?, ?, ?)',
                       (user_id, '', '/static/default-avatar.png'))
+
+        cursor.execute('INSERT INTO money (user_id, amount) VALUES (?, ?)',
+                      (user_id, 100))
 
         conn.commit()
         conn.close()
@@ -246,10 +252,13 @@ def get_profile():
 
     conn = get_db_connection()
     profile = conn.execute('SELECT * FROM profiles WHERE user_id = ?', (session['user_id'],)).fetchone()
+    money = conn.execute('SELECT * FROM money WHERE user_id = ?', (session['user_id'],)).fetchone()
     conn.close()
 
     if profile:
-        return jsonify(dict(profile))
+        result = dict(profile)
+        result['money'] = money['amount'] if money else 100
+        return jsonify(result)
     return jsonify({'error': 'profile not found'}), 404
 
 @app.route('/api/players')
@@ -259,9 +268,10 @@ def get_players():
 
     conn = get_db_connection()
     users = conn.execute('''
-        SELECT u.id, u.username, u.status, u.last_seen, p.avatar 
+        SELECT u.id, u.username, u.status, u.last_seen, p.avatar, m.amount as money
         FROM users u 
         LEFT JOIN profiles p ON u.id = p.user_id 
+        LEFT JOIN money m ON u.id = m.user_id
         WHERE u.id != ?
         ORDER BY u.status DESC, u.username
     ''', (session['user_id'],)).fetchall()
@@ -273,6 +283,7 @@ def get_players():
             'username': user['username'],
             'status': user['status'],
             'last_seen': user['last_seen'],
+            'money': user['money'] if user['money'] else 100,
             'avatar': user['avatar'] if user['avatar'] else '/static/default-avatar.png'
         })
 
@@ -288,9 +299,10 @@ def get_user(user_id):
 
     conn = get_db_connection()
     user = conn.execute('''
-        SELECT u.id, u.username, u.status, u.last_seen, p.bio, p.avatar 
+        SELECT u.id, u.username, u.status, u.last_seen, p.bio, p.avatar, m.amount as money
         FROM users u 
         LEFT JOIN profiles p ON u.id = p.user_id 
+        LEFT JOIN money m ON u.id = m.user_id
         WHERE u.id = ?
     ''', (user_id,)).fetchone()
 
@@ -301,6 +313,7 @@ def get_user(user_id):
             'status': user['status'],
             'last_seen': user['last_seen'],
             'bio': user['bio'],
+            'money': user['money'] if user['money'] else 100,
             'avatar': user['avatar'] if user['avatar'] else '/static/default-avatar.png'
         }
         conn.close()
