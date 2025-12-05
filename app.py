@@ -1,4 +1,6 @@
 
+
+
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
 from flask_session import Session
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -20,7 +22,7 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 Session(app)
 
-socketio = SocketIO(app, cors_allowed_origins="*", manage_session=False)
+socketio = SocketIO(app, cors_allowed_origins="*", manage_session=False, async_mode="threading")
 
 online_users = {}
 
