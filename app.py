@@ -147,7 +147,6 @@ def register():
         if existing_user:
             conn.close()
             return jsonify({'success': False, 'message': 'username taken'})
-            return jsonify({'success': False, 'message': 'Username already taken!'})
 
         password_hash = hash_password(password)
         cursor = conn.cursor()
