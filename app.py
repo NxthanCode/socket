@@ -24,7 +24,7 @@ def init_db():
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
     
-    # Create tables if they don't exist
+    
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -471,4 +471,8 @@ if __name__ == '__main__':
         os.makedirs('static')
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
-    socketio.run(app, debug=True, port=5000)
+    
+    socketio.run(app, 
+                host='0.0.0.0', 
+                port=int(os.environ.get('PORT', 5000)), 
+                allow_unsafe_werkzeug=True)
