@@ -1,6 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from flask_session import Session
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, emit
 import sqlite3
 import hashlib
 import os
@@ -9,14 +9,19 @@ from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here_change_in_production'
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_here_change_in_production')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 Session(app)
-socketio = SocketIO(app, cors_allowed_origins="*", manage_session=False)
+
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*", 
+                   manage_session=False,
+                   logger=True,
+                   engineio_logger=True)
 
 online_users = {}
 
@@ -470,4 +475,15 @@ if __name__ == '__main__':
         os.makedirs('static')
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
-    socketio.run(app, debug=True, port=5000)
+    
+    port = int(os.environ.get('PORT', 5000))
+    
+
+    if os.environ.get('RENDER'):
+        print(f"Starting production server on port {port}")
+    else:
+        socketio.run(app, 
+                    host='0.0.0.0', 
+                    port=port, 
+                    debug=False,
+                    allow_unsafe_werkzeug=True)
