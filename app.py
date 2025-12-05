@@ -122,9 +122,9 @@ def login():
             conn.commit()
             conn.close()
             
-            return jsonify({'success': True, 'message': 'Login successful!'})
+            return jsonify({'success': True, 'message': 'login successful'})
         else:
-            return jsonify({'success': False, 'message': 'Invalid credentials!'})
+            return jsonify({'success': False, 'message': 'invalid credentials'})
     
     return render_template('login.html')
 
@@ -140,7 +140,7 @@ def register():
         existing_user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         if existing_user:
             conn.close()
-            return jsonify({'success': False, 'message': 'Username already taken!'})
+            return jsonify({'success': False, 'message': 'username already taken'})
         
         password_hash = hash_password(password)
         cursor = conn.cursor()
@@ -156,7 +156,7 @@ def register():
         session['user_id'] = user_id
         session['username'] = username
         
-        return jsonify({'success': True, 'message': 'Registration successful!'})
+        return jsonify({'success': True, 'message': 'registration successfu!'})
     
     return render_template('register.html')
 
@@ -188,7 +188,7 @@ def profile():
         conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'message': 'Profile updated!'})
+        return jsonify({'success': True, 'message': 'profile updated'})
     
     return render_template('profile.html')
 
@@ -207,7 +207,7 @@ def messages():
 @app.route('/api/profile')
 def get_profile():
     if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'not authenticated'}), 401
     
     conn = get_db_connection()
     profile = conn.execute('SELECT * FROM profiles WHERE user_id = ?', (session['user_id'],)).fetchone()
@@ -215,12 +215,12 @@ def get_profile():
     
     if profile:
         return jsonify(dict(profile))
-    return jsonify({'error': 'Profile not found'}), 404
+    return jsonify({'error': 'profile not found'}), 404
 
 @app.route('/api/players')
 def get_players():
     if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'not authenticated'}), 401
     
     conn = get_db_connection()
     users = conn.execute('''
@@ -247,7 +247,7 @@ def get_players():
 @app.route('/api/user/<int:user_id>')
 def get_user(user_id):
     if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'not authenticated'}), 401
     
     conn = get_db_connection()
     user = conn.execute('''
@@ -270,7 +270,7 @@ def get_user(user_id):
         return jsonify(result)
     
     conn.close()
-    return jsonify({'error': 'User not found'}), 404
+    return jsonify({'error': 'user not found'}), 404
 
 @app.route('/api/messages')
 def get_messages():
