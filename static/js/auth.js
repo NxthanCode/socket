@@ -51,7 +51,7 @@ function handleLogin(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> signing in...';
     submitBtn.disabled = true;
     
-    fetch('/login', {
+    fetch('/api/login', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -116,7 +116,7 @@ function handleRegister(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> creating account...';
     submitBtn.disabled = true;
     
-    fetch('/register', {
+    fetch('/api/register', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

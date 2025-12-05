@@ -1,9 +1,6 @@
-
 let socket;
 let allPlayers = [];
 let currentFilter = 'all';
-let playersCache = null;
-let cacheTimestamp = 0;
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocket();
@@ -12,11 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeSocket() {
-    socket = io({
-        transports: ['websocket', 'polling'],
-        upgrade: false,
-        rememberUpgrade: true
-    });
+    socket = io();
     
     socket.on('connect', function() {
         console.log('connected to socket');
@@ -32,18 +25,7 @@ function initializeSocket() {
 }
 
 function loadPlayers() {
-    const now = Date.now();
-    if (playersCache && (now - cacheTimestamp) < 30000) {
-        allPlayers = playersCache;
-        renderPlayers(playersCache);
-        return;
-    }
-    
-    fetch('/api/players', {
-        headers: {
-            'Cache-Control': 'no-cache'
-        }
-    })
+    fetch('/api/players')
         .then(response => {
             if (!response.ok) {
                 if (response.status === 401) {
@@ -55,8 +37,6 @@ function loadPlayers() {
         })
         .then(players => {
             allPlayers = players;
-            playersCache = players;
-            cacheTimestamp = Date.now();
             renderPlayers(players);
         })
         .catch(error => {
@@ -80,14 +60,10 @@ function renderPlayers(players) {
     
     playersGrid.innerHTML = '';
     
-    const fragment = document.createDocumentFragment();
-    
     players.forEach(player => {
         const playerCard = createPlayerCard(player);
-        fragment.appendChild(playerCard);
+        playersGrid.appendChild(playerCard);
     });
-    
-    playersGrid.appendChild(fragment);
 }
 
 function createPlayerCard(player) {
@@ -102,7 +78,7 @@ function createPlayerCard(player) {
     card.innerHTML = `
         <div class="player-header">
             <div class="player-avatar">
-                <img src="${player.avatar}" alt="${player.username}" loading="lazy" onerror="this.src='/static/default-avatar.png'">
+                <img src="${player.avatar}" alt="${player.username}" onerror="this.src='/static/default-avatar.png'">
             </div>
             <div class="player-info">
                 <div class="player-name">${player.username}</div>
@@ -141,12 +117,8 @@ function setupEventListeners() {
     });
     
     const searchInput = document.getElementById('playerSearch');
-    let searchTimeout;
     searchInput.addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            filterPlayers();
-        }, 300);
+        filterPlayers();
     });
 }
 
@@ -205,11 +177,7 @@ function updateAllPlayersStatus(onlineUserIds) {
 }
 
 function viewProfile(userId) {
-    fetch(`/api/user/${userId}`, {
-        headers: {
-            'Cache-Control': 'max-age=60'
-        }
-    })
+    fetch(`/api/user/${userId}`)
         .then(response => response.json())
         .then(user => {
             alert(`${user.username}\nstatus: ${user.status}\nbio: ${user.bio || 'no bio'}`);
