@@ -1,5 +1,4 @@
-
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
 from flask_session import Session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import sqlite3
@@ -8,17 +7,16 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
-from functools import lru_cache
 
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_here_change_in_production')
+app.secret_key = 'your_secret_key_here_change_in_production'
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000
 Session(app)
 
 socketio = SocketIO(app, cors_allowed_origins="*", manage_session=False, async_mode="threading")
@@ -29,6 +27,7 @@ def init_db():
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
 
+ 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,24 +61,12 @@ def init_db():
     )
     ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS money (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        amount INTEGER DEFAULT 100,
-        FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-    ''')
-
     conn.commit()
     conn.close()
 
 def get_db_connection():
-    conn = sqlite3.connect('database.db', check_same_thread=False)
+    conn = sqlite3.connect('database.db')
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-2000")
     return conn
 
 def hash_password(password):
@@ -88,29 +75,13 @@ def hash_password(password):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-@app.after_request
-def add_header(response):
-    response.headers['Cache-Control'] = 'public, max-age=31536000'
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    return response
-
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    response = send_from_directory('static', filename)
-    response.headers['Cache-Control'] = 'public, max-age=31536000'
-    return response
-
 @app.before_request
 def make_session_permanent():
     session.permanent = True
 
 @app.route('/')
 def index():
-    response = make_response(render_template('index.html'))
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    return response
+    return render_template('index.html')
 
 @app.route('/api/check-auth')
 def check_auth():
@@ -118,7 +89,6 @@ def check_auth():
         conn = get_db_connection()
         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         profile = conn.execute('SELECT * FROM profiles WHERE user_id = ?', (session['user_id'],)).fetchone()
-        money = conn.execute('SELECT * FROM money WHERE user_id = ?', (session['user_id'],)).fetchone()
         conn.close()
 
         if user:
@@ -129,8 +99,7 @@ def check_auth():
                 'profile': {
                     'bio': profile['bio'] if profile else '',
                     'avatar': profile['avatar'] if profile else '/static/default-avatar.png'
-                } if profile else None,
-                'money': money['amount'] if money else 100
+                } if profile else None
             })
 
     return jsonify({'authenticated': False})
@@ -160,9 +129,7 @@ def login():
         else:
             return jsonify({'success': False, 'message': 'invalid'})
 
-    response = make_response(render_template('login.html'))
-    response.headers['Cache-Control'] = 'no-cache'
-    return response
+    return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -186,9 +153,6 @@ def register():
         cursor.execute('INSERT INTO profiles (user_id, bio, avatar) VALUES (?, ?, ?)',
                       (user_id, '', '/static/default-avatar.png'))
 
-        cursor.execute('INSERT INTO money (user_id, amount) VALUES (?, ?)',
-                      (user_id, 100))
-
         conn.commit()
         conn.close()
 
@@ -197,9 +161,7 @@ def register():
 
         return jsonify({'success': True, 'message': 'registration successful'})
 
-    response = make_response(render_template('register.html'))
-    response.headers['Cache-Control'] = 'no-cache'
-    return response
+    return render_template('register.html')
 
 @app.route('/profile', methods=['GET', 'POST'])
 def profile():
@@ -252,13 +214,10 @@ def get_profile():
 
     conn = get_db_connection()
     profile = conn.execute('SELECT * FROM profiles WHERE user_id = ?', (session['user_id'],)).fetchone()
-    money = conn.execute('SELECT * FROM money WHERE user_id = ?', (session['user_id'],)).fetchone()
     conn.close()
 
     if profile:
-        result = dict(profile)
-        result['money'] = money['amount'] if money else 100
-        return jsonify(result)
+        return jsonify(dict(profile))
     return jsonify({'error': 'profile not found'}), 404
 
 @app.route('/api/players')
@@ -268,10 +227,9 @@ def get_players():
 
     conn = get_db_connection()
     users = conn.execute('''
-        SELECT u.id, u.username, u.status, u.last_seen, p.avatar, m.amount as money
+        SELECT u.id, u.username, u.status, u.last_seen, p.avatar 
         FROM users u 
         LEFT JOIN profiles p ON u.id = p.user_id 
-        LEFT JOIN money m ON u.id = m.user_id
         WHERE u.id != ?
         ORDER BY u.status DESC, u.username
     ''', (session['user_id'],)).fetchall()
@@ -283,14 +241,11 @@ def get_players():
             'username': user['username'],
             'status': user['status'],
             'last_seen': user['last_seen'],
-            'money': user['money'] if user['money'] else 100,
             'avatar': user['avatar'] if user['avatar'] else '/static/default-avatar.png'
         })
 
     conn.close()
-    response = jsonify(players_list)
-    response.headers['Cache-Control'] = 'private, max-age=30'
-    return response
+    return jsonify(players_list)
 
 @app.route('/api/user/<int:user_id>')
 def get_user(user_id):
@@ -299,10 +254,9 @@ def get_user(user_id):
 
     conn = get_db_connection()
     user = conn.execute('''
-        SELECT u.id, u.username, u.status, u.last_seen, p.bio, p.avatar, m.amount as money
+        SELECT u.id, u.username, u.status, u.last_seen, p.bio, p.avatar 
         FROM users u 
         LEFT JOIN profiles p ON u.id = p.user_id 
-        LEFT JOIN money m ON u.id = m.user_id
         WHERE u.id = ?
     ''', (user_id,)).fetchone()
 
@@ -313,13 +267,10 @@ def get_user(user_id):
             'status': user['status'],
             'last_seen': user['last_seen'],
             'bio': user['bio'],
-            'money': user['money'] if user['money'] else 100,
             'avatar': user['avatar'] if user['avatar'] else '/static/default-avatar.png'
         }
         conn.close()
-        response = jsonify(result)
-        response.headers['Cache-Control'] = 'private, max-age=60'
-        return response
+        return jsonify(result)
 
     conn.close()
     return jsonify({'error': 'User not found'}), 404
