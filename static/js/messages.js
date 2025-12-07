@@ -3,6 +3,7 @@ let currentUserId = null;
 let currentUserData = null;
 let conversations = [];
 let typingTimeout = null;
+let notiTimer = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocket();
@@ -321,14 +322,55 @@ function handleNewMessage(message) {
         scrollToBottom();
         updateConversationPreview(currentUserId, message.message);
     } else {
+        showMsgToast(message);
+        
         const conversationItem = document.querySelector(`.conversation-item[data-user-id="${message.sender_id}"]`);
         if (conversationItem) {
             updateConversationPreview(message.sender_id, message.message);
-            conversationItem.querySelector('.unread-badge')?.remove();
+            
+            let unreadBadge = conversationItem.querySelector('.unread-badge');
+            if (unreadBadge) {
+                const currentCount = parseInt(unreadBadge.textContent);
+                unreadBadge.textContent = currentCount + 1;
+            } else {
+                const badge = document.createElement('span');
+                badge.className = 'unread-badge';
+                badge.textContent = '1';
+                conversationItem.querySelector('.conversation-header').appendChild(badge);
+            }
         }
     }
 }
 
+function showMsgToast(message) {
+    const shortMsg = message.message.length > 40 ? 
+        message.message.substring(0, 40) + '...' : 
+        message.message;
+    
+    const toast = showToast(
+        `💬 ${message.sender_name}`,
+        shortMsg,
+        'info',
+        5000
+    );
+    
+    toast.style.cursor = 'pointer';
+    
+    toast.addEventListener('click', function() {
+        if (window.location.pathname !== '/messages') {
+            window.location.href = `/messages?user=${message.sender_id}`;
+        } else {
+            openConversation(message.sender_id);
+        }
+        
+        const closeBtn = toast.querySelector('.toast-close');
+        if (closeBtn) {
+            removeToast(closeBtn);
+        }
+    });
+    
+    return toast;
+}
 function updateConversationPreview(userId, message) {
     const conversationItem = document.querySelector(`.conversation-item[data-user-id="${userId}"]`);
     if (conversationItem) {
