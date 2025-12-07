@@ -112,6 +112,22 @@ function initializeSocket() {
         }
     });
 
+    socket.on('balance_update', function(data) {
+        console.log('Balance update received:', data);
+        
+        // Check if this update is for the current user
+        if (data.user_id === currentUser.id) {
+            // Update current user's balance
+            currentUser.balance = data.new_balance;
+            
+            // Update balance display in header
+            updateHeaderBalance(data.new_balance);
+            
+            // Show a subtle notification
+            showToast('Balance Updated', `Your new balance: $${data.new_balance}`, 'info', 2000);
+        }
+    });
+
     socket.on('pvp_game_ended', function(data) {
         console.log('PVP game ended via socket:', data);
         
@@ -128,23 +144,31 @@ function initializeSocket() {
             revealAllMines(data.all_mines, data.mine_hit_by);
         }
         
-        // Show game result with proper winnings
+        // Determine if current user is winner or loser
         const didIWin = data.winner_id === currentUser.id;
+        const isLoser = data.mine_hit_by === currentUser.id;
+        
         let message = '';
         
         if (data.reason === 'mine_hit') {
-            const mineHitByCurrent = data.mine_hit_by === currentUser.id;
-            message = mineHitByCurrent ? 
+            message = isLoser ? 
                 `You hit a mine and lost!` : 
-                `You won! ${mineHitByCurrent ? 'You' : 'Opponent'} hit a mine!`;
-        } else if (data.reason === 'score_win') {
-            message = didIWin ? 
-                `You reached the target score first!` : 
-                `Opponent reached the target score first!`;
+                `You won! Opponent hit a mine!`;
         }
         
-        // Show result with CORRECT winnings
-        showGameResult(data.winner_id, data.winnings || 0, message);
+        // Get the correct new balance for the current user
+        let userNewBalance = 0;
+        if (didIWin && data.winner_new_balance) {
+            userNewBalance = data.winner_new_balance;
+        } else if (!didIWin && data.loser_new_balance) {
+            userNewBalance = data.loser_new_balance;
+        }
+        
+        // Show result with balance information
+        showGameResult(data.winner_id, data.winnings || 0, message, {
+            winner_new_balance: userNewBalance,
+            new_balance: userNewBalance
+        });
         
         // Disable all cells
         disableAllCells();
@@ -890,14 +914,16 @@ function updateGameUI(game) {
 }
 
 // Update
-
-function showGameResult(winnerId, winnings, message) {
+function showGameResult(winnerId, winnings, message, additionalData = {}) {
     const gameView = document.getElementById('gameView');
     
     if (!gameView) return;
     
     const didIWin = winnerId === currentUser.id;
     const isDraw = !winnerId;
+    
+    // Use actual new balance from server if provided
+    const newBalance = additionalData.winner_new_balance || additionalData.new_balance;
     
     let resultHTML = '';
     if (isDraw) {
@@ -906,6 +932,7 @@ function showGameResult(winnerId, winnings, message) {
                 <i class="fas fa-handshake"></i>
                 <h2>Draw!</h2>
                 <p>Both players revealed the same number of safe cells</p>
+                ${newBalance ? `<p class="winnings">Your balance: $${newBalance}</p>` : ''}
             </div>
         `;
     } else if (didIWin) {
@@ -913,8 +940,9 @@ function showGameResult(winnerId, winnings, message) {
             <div class="game-result win">
                 <i class="fas fa-trophy"></i>
                 <h2>You Win!</h2>
-                <p>${message || 'Congratulations!'}</p>
+                <p>${message || 'Your opponent hit a mine!'}</p>
                 <p class="winnings">You won $${winnings}!</p>
+                ${newBalance ? `<p class="balance">Your new balance: $${newBalance}</p>` : ''}
             </div>
         `;
     } else {
@@ -922,7 +950,8 @@ function showGameResult(winnerId, winnings, message) {
             <div class="game-result lose">
                 <i class="fas fa-times-circle"></i>
                 <h2>You Lost</h2>
-                <p>${message || 'Better luck next time!'}</p>
+                <p>${message || 'You hit a mine!'}</p>
+                ${newBalance ? `<p class="balance">Your balance: $${newBalance}</p>` : ''}
             </div>
         `;
     }
@@ -941,11 +970,17 @@ function showGameResult(winnerId, winnings, message) {
         gameBoard.appendChild(resultDiv);
     }
     
-    // Show toast - only ONE toast
+    // Update user's balance immediately
+    if (newBalance && currentUser) {
+        currentUser.balance = newBalance;
+        updateHeaderBalance(newBalance);
+    }
+    
+    // Show toast
     if (didIWin) {
         showToast('Victory!', `You won $${winnings}!`, 'success', 5000);
     } else {
-        showToast('Game Over', 'The game has ended', 'info', 5000);
+        showToast('Game Over', 'You hit a mine and lost!', 'error', 5000);
     }
     
     // Return to lobby after delay
@@ -953,7 +988,6 @@ function showGameResult(winnerId, winnings, message) {
         backToLobby();
     }, 7000);
 }
-
 
 function backToLobby() {
     if (currentGameId) {

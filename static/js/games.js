@@ -64,13 +64,31 @@ function updateHeaderBalance(balance) {
 }
 function loadPlayersInGame() {
     fetch('/api/players-in-game')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(players => {
+            // Handle case where API returns an error object
+            if (players.error) {
+                console.error('API Error:', players.error);
+                updateSpectatingSidebar([]);
+                return;
+            }
+            
             const minesPlayers = players.filter(player => player.game_type === 'mines');
-            updateSpectatingSidebar(minesPlayers);
+            const slotsPlayers = players.filter(player => player.game_type === 'slots');
+            const pvpPlayers = players.filter(player => player.game_type === 'pvp');
+            
+            // Combine all players for the sidebar
+            updateSpectatingSidebar([...minesPlayers, ...slotsPlayers, ...pvpPlayers]);
         })
         .catch(error => {
             console.error('Error loading players in game:', error);
+            // Show empty sidebar on error
+            updateSpectatingSidebar([]);
         });
 }
 function updateSpectatingSidebar(players) {
@@ -81,7 +99,7 @@ function updateSpectatingSidebar(players) {
         sidebar.className = 'spectating-sidebar hidden';
         sidebar.innerHTML = `
             <div class="sidebar-header">
-                <h4><i class="fas fa-bomb"></i> Live Mines Games</h4>
+                <h4><i class="fas fa-eye"></i> Live Games</h4>
                 <button class="sidebar-close" onclick="toggleSpectatingSidebar()">&times;</button>
             </div>
             <div class="sidebar-content">
@@ -95,53 +113,123 @@ function updateSpectatingSidebar(players) {
         `;
         document.body.appendChild(sidebar);
     }
+    
     const sessionsList = document.getElementById('sessionsList');
     if (players.length === 0) {
         sessionsList.innerHTML = `
             <div class="no-sessions">
-                <i class="fas fa-bomb"></i>
-                <p>No live mines games</p>
-                <p class="hint">Players will appear here when they start a mines game</p>
+                <i class="fas fa-gamepad"></i>
+                <p>No live games</p>
+                <p class="hint">Players will appear here when they start games</p>
             </div>
         `;
         return;
     }
+    
     sessionsList.innerHTML = '';
-    players.forEach(player => {
-        const sessionItem = document.createElement('div');
-        sessionItem.className = 'session-item';
-        if (spectatingGameId === player.game_id && spectatingGameType === player.game_type) {
-            sessionItem.classList.add('watching');
-        }
-        sessionItem.innerHTML = `
-            <div class="session-header">
-                <div class="session-avatar">
-                    <img src="${player.avatar}" alt="${player.username}" onerror="this.src='/static/default-avatar.png'">
-                </div>
-                <div class="session-info">
-                    <div class="session-name">${player.username}</div>
-                    <div class="session-game">
-                        <i class="fas fa-bomb"></i>
-                        mines
+    
+    // Group PVP games separately
+    const pvpGames = players.filter(p => p.is_pvp);
+    const otherGames = players.filter(p => !p.is_pvp);
+    
+    // Add PVP games section
+    if (pvpGames.length > 0) {
+        const pvpSection = document.createElement('div');
+        pvpSection.className = 'sessions-section';
+        pvpSection.innerHTML = `
+            <div class="section-header">
+                <i class="fas fa-swords"></i> 1v1 PVP Matches
+            </div>
+        `;
+        
+        pvpGames.forEach(player => {
+            const sessionItem = document.createElement('div');
+            sessionItem.className = 'session-item pvp';
+            if (spectatingGameId === player.game_id && spectatingGameType === player.game_type) {
+                sessionItem.classList.add('watching');
+            }
+            sessionItem.innerHTML = `
+                <div class="session-header">
+                    <div class="session-avatar">
+                        <img src="${player.avatar}" alt="${player.username}" onerror="this.src='/static/default-avatar.png'">
+                    </div>
+                    <div class="session-info">
+                        <div class="session-name">${player.username}</div>
+                        <div class="session-game">
+                            <i class="fas fa-swords"></i>
+                            vs ${player.opponent}
+                        </div>
                     </div>
                 </div>
+                <div class="session-stats">
+                    <span class="stat"><i class="fas fa-swords"></i> PVP</span>
+                </div>
+                ${spectatingGameId === player.game_id && spectatingGameType === player.game_type ? 
+                    `<button class="btn btn-danger btn-small" onclick="stopSpectating()">
+                        <i class="fas fa-eye-slash"></i> Stop
+                    </button>` :
+                    `<button class="btn btn-primary btn-small" onclick="startSpectating(${player.user_id}, '${player.game_type}', '${player.game_id}')">
+                        <i class="fas fa-eye"></i> Spectate
+                    </button>`
+                }
+            `;
+            pvpSection.appendChild(sessionItem);
+        });
+        
+        sessionsList.appendChild(pvpSection);
+    }
+    
+    // Add other games section
+    if (otherGames.length > 0) {
+        const otherSection = document.createElement('div');
+        otherSection.className = 'sessions-section';
+        otherSection.innerHTML = `
+            <div class="section-header">
+                <i class="fas fa-gamepad"></i> Single Player Games
             </div>
-            <div class="session-stats">
-                <span class="stat"><i class="fas fa-coins"></i> $${player.balance}</span>
-                <span class="stat"><i class="fas fa-bomb"></i> Mines</span>
-            </div>
-            ${spectatingGameId === player.game_id && spectatingGameType === player.game_type ? 
-                `<button class="btn btn-danger btn-small" onclick="stopSpectating()">
-                    <i class="fas fa-eye-slash"></i> Stop
-                </button>` :
-                `<button class="btn btn-primary btn-small" onclick="startSpectating(${player.user_id}, '${player.game_type}', '${player.game_id}')">
-                    <i class="fas fa-eye"></i> Spectate
-                </button>`
-            }
         `;
-        sessionsList.appendChild(sessionItem);
-    });
+        
+        otherGames.forEach(player => {
+            const gameIcon = player.game_type === 'mines' ? 'fa-bomb' : 'fa-slot-machine';
+            const sessionItem = document.createElement('div');
+            sessionItem.className = 'session-item';
+            if (spectatingGameId === player.game_id && spectatingGameType === player.game_type) {
+                sessionItem.classList.add('watching');
+            }
+            sessionItem.innerHTML = `
+                <div class="session-header">
+                    <div class="session-avatar">
+                        <img src="${player.avatar}" alt="${player.username}" onerror="this.src='/static/default-avatar.png'">
+                    </div>
+                    <div class="session-info">
+                        <div class="session-name">${player.username}</div>
+                        <div class="session-game">
+                            <i class="fas ${gameIcon}"></i>
+                            ${player.game_type}
+                        </div>
+                    </div>
+                </div>
+                <div class="session-stats">
+                    <span class="stat"><i class="fas fa-coins"></i> $${player.balance}</span>
+                    <span class="stat"><i class="fas ${gameIcon}"></i> ${player.game_type}</span>
+                </div>
+                ${spectatingGameId === player.game_id && spectatingGameType === player.game_type ? 
+                    `<button class="btn btn-danger btn-small" onclick="stopSpectating()">
+                        <i class="fas fa-eye-slash"></i> Stop
+                    </button>` :
+                    `<button class="btn btn-primary btn-small" onclick="startSpectating(${player.user_id}, '${player.game_type}', '${player.game_id}')">
+                        <i class="fas fa-eye"></i> Spectate
+                    </button>`
+                }
+            `;
+            otherSection.appendChild(sessionItem);
+        });
+        
+        sessionsList.appendChild(otherSection);
+    }
 }
+
+
 function toggleSpectatingSidebar() {
     const sidebar = document.getElementById('spectatingSidebar');
     if (sidebar) {
@@ -153,10 +241,11 @@ function toggleSpectatingSidebar() {
 }
 function startSpectating(hostId, gameType, gameId) {
     console.log('START SPECTATING:', { hostId, gameType, gameId });
-    if (gameType !== 'mines' && gameType !== 'slots') {
-        showToast('Cannot Spectate', 'Only mines and slots games can be spectated', 'error', 3000);
+    if (gameType !== 'mines' && gameType !== 'slots' && gameType !== 'pvp') {
+        showToast('Cannot Spectate', 'Only mines, slots, and PVP games can be spectated', 'error', 3000);
         return;
     }
+    
     fetch('/api/spectate/start', {
         method: 'POST',
         headers: {
@@ -174,11 +263,15 @@ function startSpectating(hostId, gameType, gameId) {
             isSpectating = true;
             spectatingGameType = gameType;
             spectatingGameId = gameId;
+            
             if (gameType === 'mines') {
                 fetchGameData(gameType, gameId, hostId);
             } else if (gameType === 'slots') {
                 showSlotsSpectatingView(hostId, gameId);
+            } else if (gameType === 'pvp') {
+                fetchGameData(gameType, gameId, hostId);
             }
+            
             showToast('Spectating Started', `Now watching ${gameType} game`, 'info', 3000);
             updateSpectatingSidebar([]);
         } else {
@@ -324,11 +417,12 @@ function stopSpectating() {
     });
 }
 function fetchGameData(gameType, gameId, hostId) {
-    if (gameType !== 'mines' && gameType !== 'slots') {
-        showToast('Spectating Error', 'Only mines and slots games can be spectated', 'error', 3000);
+    if (gameType !== 'mines' && gameType !== 'slots' && gameType !== 'pvp') {
+        showToast('Spectating Error', 'Only mines, slots, and PVP games can be spectated', 'error', 3000);
         stopSpectating();
         return;
     }
+    
     fetch(`/api/spectate/game-data?game_type=${gameType}&game_id=${gameId}`)
         .then(response => response.json())
         .then(data => {
@@ -336,10 +430,14 @@ function fetchGameData(gameType, gameId, hostId) {
                 spectatingGameData = data.game_data;
                 showSpectatingView(gameType, data.game_data);
                 setupSpectatingSocketListeners(gameType, gameId, hostId);
+                
                 if (gameType === 'mines') {
                     setupMinesSpectating(data.game_data);
                 } else if (gameType === 'slots') {
                     setupSlotsSpectating(data.game_data);
+                } else if (gameType === 'pvp') {
+                    showPvPSpectatingView(data.game_data);
+                    setupPvPSpectatingSocketListeners(gameId);
                 }
             }
         })
@@ -347,6 +445,141 @@ function fetchGameData(gameType, gameId, hostId) {
             console.error('Error fetching game data:', error);
         });
 }
+
+
+function setupPvPSpectatingSocketListeners(gameId) {
+    const socket = io();
+    
+    socket.emit('join_pvp_spectator', { game_id: gameId });
+    
+    socket.on('pvp_spectator_update', function(data) {
+        if (data.game_id == gameId) {
+            updatePvPSpectatingDisplay(data);
+        }
+    });
+    
+    socket.on('pvp_spectator_game_ended', function(data) {
+        if (data.game_id == gameId) {
+            updatePvPSpectatingGameEnded(data);
+        }
+    });
+}
+
+function updatePvPSpectatingDisplay(data) {
+    if (!spectatingGameData) return;
+    
+    // Update the grid
+    const cell = document.querySelector(`.spectating-cell[data-index="${data.cell_index}"]`);
+    if (cell) {
+        if (data.result === 'mine') {
+            cell.classList.remove('hidden');
+            cell.classList.add('mine');
+            cell.innerHTML = '<i class="fas fa-bomb"></i>';
+            
+            // Find which player hit the mine
+            const player = spectatingGameData.player1.id === data.player_id ? 
+                spectatingGameData.player1 : spectatingGameData.player2;
+            cell.title = `${player.username} hit a mine!`;
+            
+            // Show toast
+            showToast('Mine Hit!', `${player.username} hit a mine!`, 'error', 3000);
+        } else {
+            cell.classList.remove('hidden');
+            cell.classList.add('revealed');
+            cell.innerHTML = '<i class="fas fa-gem"></i>';
+            
+            // Color code based on player
+            const player = spectatingGameData.player1.id === data.player_id ? 
+                spectatingGameData.player1 : spectatingGameData.player2;
+            cell.style.backgroundColor = data.player_id === spectatingGameData.player1.id ? 
+                'rgba(76, 201, 240, 0.2)' : 'rgba(247, 37, 133, 0.2)';
+            cell.title = `Revealed by ${player.username}`;
+            
+            // Update player score
+            if (player.id === spectatingGameData.player1.id) {
+                spectatingGameData.player1.score = data.score;
+                document.querySelector('.pvp-player:first-child .player-score').textContent = 
+                    `Score: ${data.score}`;
+            } else {
+                spectatingGameData.player2.score = data.score;
+                document.querySelector('.pvp-player:last-child .player-score').textContent = 
+                    `Score: ${data.score}`;
+            }
+            
+            // Show toast
+            showToast('Safe!', `${player.username} found a gem!`, 'success', 2000);
+        }
+    }
+    
+    // Update current turn indicator
+    if (data.next_turn) {
+        spectatingGameData.current_turn = data.next_turn;
+        updatePvPTurnIndicator();
+    }
+    
+    // If game ended, update accordingly
+    if (data.game_ended) {
+        showToast('Game Ended!', 'The PVP game has finished', 'info', 3000);
+    }
+}
+
+function updatePvPTurnIndicator() {
+    if (!spectatingGameData) return;
+    
+    const currentTurnElement = document.getElementById('currentTurnSpectating');
+    if (currentTurnElement) {
+        const currentPlayer = spectatingGameData.current_turn === spectatingGameData.player1.id ? 
+            spectatingGameData.player1 : spectatingGameData.player2;
+        currentTurnElement.textContent = currentPlayer.username;
+    }
+    
+    // Update active player highlight
+    document.querySelectorAll('.pvp-player').forEach(player => {
+        player.classList.remove('active');
+    });
+    
+    if (spectatingGameData.current_turn === spectatingGameData.player1.id) {
+        document.querySelector('.pvp-player:first-child').classList.add('active');
+    } else {
+        document.querySelector('.pvp-player:last-child').classList.add('active');
+    }
+}
+
+function updatePvPSpectatingGameEnded(data) {
+    if (!spectatingGameData) return;
+    
+    spectatingGameData.game_state = 'finished';
+    spectatingGameData.winner_id = data.winner_id;
+    
+    const statusElement = document.getElementById('pvpSpectatingStatus');
+    if (statusElement) {
+        if (data.winner_id) {
+            const winner = spectatingGameData.winner_id === spectatingGameData.player1.id ? 
+                spectatingGameData.player1 : spectatingGameData.player2;
+            statusElement.innerHTML = `<i class="fas fa-trophy"></i> ${winner.username} wins! Prize: $${data.winnings || 0}`;
+            statusElement.style.color = '#38b000';
+        } else {
+            statusElement.innerHTML = `<i class="fas fa-handshake"></i> Game ended in a draw`;
+            statusElement.style.color = '#ff9e00';
+        }
+    }
+    
+    // Update stats section
+    const statsContainer = document.querySelector('.spectating-stats');
+    if (statsContainer && data.winner_id) {
+        const winnerStat = document.createElement('div');
+        winnerStat.className = 'stat-item';
+        winnerStat.innerHTML = `
+            <div class="stat-label">Winner</div>
+            <div class="stat-value win">${spectatingGameData.winner_id === spectatingGameData.player1.id ? 
+                spectatingGameData.player1.username : spectatingGameData.player2.username}</div>
+        `;
+        statsContainer.appendChild(winnerStat);
+    }
+    
+    showToast('Game Over', 'The PVP game has ended', 'info', 5000);
+}
+
 function setupSlotsSpectating(gameData) {
     const spectatingContent = document.getElementById('spectatingContent');
     spectatingContent.innerHTML = `
@@ -424,11 +657,12 @@ function generateSpectatingSlotsReels(slotType, currentReels) {
     }
 }
 function showSpectatingView(gameType, gameData) {
-    if (gameType !== 'mines' && gameType !== 'slots') {
-        showToast('Error', 'Only mines and slots games can be spectated', 'error', 3000);
+    if (gameType !== 'mines' && gameType !== 'slots' && gameType !== 'pvp') {
+        showToast('Error', 'Only mines, slots, and PVP games can be spectated', 'error', 3000);
         stopSpectating();
         return;
     }
+    
     let spectatingContainer = document.getElementById('spectatingContainer');
     if (!spectatingContainer) {
         spectatingContainer = document.createElement('div');
@@ -436,18 +670,35 @@ function showSpectatingView(gameType, gameData) {
         spectatingContainer.className = 'spectating-container';
         document.body.appendChild(spectatingContainer);
     }
-    const gameIcon = gameType === 'mines' ? 'fa-bomb' : 'fa-slot-machine';
+    
+    const gameIcon = gameType === 'mines' ? 'fa-bomb' : 
+                    gameType === 'slots' ? 'fa-slot-machine' : 
+                    'fa-swords';
+    const gameName = gameType === 'mines' ? 'Mines' : 
+                    gameType === 'slots' ? 'Slots' : 
+                    '1v1 PVP';
+    
     spectatingContainer.innerHTML = `
         <div class="spectating-header">
             <div class="spectating-host-info">
                 <div class="host-avatar">
-                    <img src="${gameData.host_avatar}" alt="${gameData.host_username}" onerror="this.src='/static/default-avatar.png'">
+                    <img src="${gameType === 'pvp' ? 
+                        (gameData.player1?.avatar || '/static/default-avatar.png') : 
+                        (gameData.host_avatar || '/static/default-avatar.png')}" 
+                        alt="${gameType === 'pvp' ? 
+                        (gameData.player1?.username || 'Player') : 
+                        (gameData.host_username || 'Player')}" 
+                        onerror="this.src='/static/default-avatar.png'">
                 </div>
                 <div class="host-details">
-                    <div class="host-name">${gameData.host_username}</div>
+                    <div class="host-name">
+                        ${gameType === 'pvp' ? 
+                            `${gameData.player1?.username || 'Player 1'} vs ${gameData.player2?.username || 'Player 2'}` :
+                            gameData.host_username || 'Player'}
+                    </div>
                     <div class="host-game">
                         <i class="fas ${gameIcon}"></i>
-                        ${gameType.charAt(0).toUpperCase() + gameType.slice(1)} Game
+                        ${gameName} Game
                     </div>
                 </div>
             </div>
@@ -462,36 +713,58 @@ function showSpectatingView(gameType, gameData) {
             </div>
         </div>
         <div class="spectating-stats">
-            <div class="stat-item">
-                <div class="stat-label">Balance</div>
-                <div class="stat-value">$${gameData.host_balance}</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Current Bet</div>
-                <div class="stat-value">$${gameData.bet_amount || gameData.current_bet || 0}</div>
-            </div>
-            ${gameType === 'mines' ? `
+            ${gameType === 'pvp' ? `
                 <div class="stat-item">
-                    <div class="stat-label">Revealed Cells</div>
-                    <div class="stat-value" id="revealedCountSpectating">0/${(gameData.grid_size * gameData.grid_size) - gameData.mines_count}</div>
+                    <div class="stat-label">Bet</div>
+                    <div class="stat-value">$${gameData.bet_amount}</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-label">Potential Win</div>
-                    <div class="stat-value">$${gameData.potential_win || 0}</div>
-                </div>
-            ` : ''}
-            ${gameType === 'slots' ? `
-                <div class="stat-item">
-                    <div class="stat-label">Last Win</div>
-                    <div class="stat-value">$${gameData.last_win || 0}</div>
+                    <div class="stat-label">Prize Pool</div>
+                    <div class="stat-value win">$${gameData.bet_amount * 2}</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-label">Total Spins</div>
-                    <div class="stat-value">${gameData.total_spins || 0}</div>
+                    <div class="stat-label">Grid Size</div>
+                    <div class="stat-value">${gameData.grid_size}x${gameData.grid_size}</div>
                 </div>
-            ` : ''}
+                <div class="stat-item">
+                    <div class="stat-label">Mines</div>
+                    <div class="stat-value">${gameData.mines_count}</div>
+                </div>
+            ` : `
+                <div class="stat-item">
+                    <div class="stat-label">Balance</div>
+                    <div class="stat-value">$${gameData.host_balance}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Current Bet</div>
+                    <div class="stat-value">$${gameData.bet_amount || gameData.current_bet || 0}</div>
+                </div>
+                ${gameType === 'mines' ? `
+                    <div class="stat-item">
+                        <div class="stat-label">Revealed Cells</div>
+                        <div class="stat-value" id="revealedCountSpectating">
+                            ${((gameData.revealed_cells || []).length || 0)}/${(gameData.grid_size * gameData.grid_size) - gameData.mines_count}
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Potential Win</div>
+                        <div class="stat-value">$${gameData.potential_win || 0}</div>
+                    </div>
+                ` : ''}
+                ${gameType === 'slots' ? `
+                    <div class="stat-item">
+                        <div class="stat-label">Last Win</div>
+                        <div class="stat-value">$${gameData.last_win || 0}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Spins</div>
+                        <div class="stat-value">${gameData.total_spins || 0}</div>
+                    </div>
+                ` : ''}
+            `}
         </div>
     `;
+    
     spectatingContainer.style.display = 'block';
 }
 function setupSpectatingSocketListeners(gameType, gameId, hostId) {
@@ -572,6 +845,176 @@ function updateSpectatingMinesCashout(data) {
     }
     
     showToast('Cashout', `Player cashed out $${data.win_amount || 0}!`, 'success', 3000);
+}
+
+
+function showPvPSpectatingView(gameData) {
+    let spectatingContainer = document.getElementById('spectatingContainer');
+    if (!spectatingContainer) {
+        spectatingContainer = document.createElement('div');
+        spectatingContainer.id = 'spectatingContainer';
+        spectatingContainer.className = 'spectating-container';
+        document.body.appendChild(spectatingContainer);
+    }
+    
+    const isPlayer1 = gameData.player1.id === spectatingGameData?.host_id;
+    const currentPlayer = isPlayer1 ? gameData.player1 : gameData.player2;
+    const opponent = isPlayer1 ? gameData.player2 : gameData.player1;
+    
+    spectatingContainer.innerHTML = `
+        <div class="spectating-header">
+            <div class="spectating-host-info">
+                <div class="host-avatar">
+                    <img src="${currentPlayer.avatar}" alt="${currentPlayer.username}" onerror="this.src='/static/default-avatar.png'">
+                </div>
+                <div class="host-details">
+                    <div class="host-name">${currentPlayer.username} vs ${opponent.username}</div>
+                    <div class="host-game">
+                        <i class="fas fa-swords"></i>
+                        1v1 PVP Game
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-danger btn-small" onclick="stopSpectating()">
+                <i class="fas fa-eye-slash"></i> Stop Spectating
+            </button>
+        </div>
+        <div class="spectating-content" id="spectatingContent">
+            <div class="pvp-spectating-view">
+                <div class="pvp-spectating-header">
+                    <h3><i class="fas fa-swords"></i> 1v1 PVP Match</h3>
+                </div>
+                
+                <div class="pvp-spectating-players">
+                    <div class="pvp-player ${gameData.current_turn === gameData.player1.id ? 'active' : ''}">
+                        <div class="player-avatar">
+                            <img src="${gameData.player1.avatar}" alt="${gameData.player1.username}" onerror="this.src='/static/default-avatar.png'">
+                        </div>
+                        <div class="player-info">
+                            <div class="player-name">${gameData.player1.username}</div>
+                            <div class="player-score">Score: ${gameData.player1.score}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="vs-divider">
+                        <i class="fas fa-swords"></i> VS
+                    </div>
+                    
+                    <div class="pvp-player ${gameData.current_turn === gameData.player2.id ? 'active' : ''}">
+                        <div class="player-avatar">
+                            <img src="${gameData.player2.avatar}" alt="${gameData.player2.username}" onerror="this.src='/static/default-avatar.png'">
+                        </div>
+                        <div class="player-info">
+                            <div class="player-name">${gameData.player2.username}</div>
+                            <div class="player-score">Score: ${gameData.player2.score}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="pvp-spectating-grid" id="pvpSpectatingGrid">
+                    <!-- Grid will be generated here -->
+                </div>
+                
+                <div class="pvp-spectating-info">
+                    <div class="info-item">
+                        <div class="info-label">Bet Amount</div>
+                        <div class="info-value">$${gameData.bet_amount}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Prize Pool</div>
+                        <div class="info-value win">$${gameData.bet_amount * 2}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Current Turn</div>
+                        <div class="info-value" id="currentTurnSpectating">
+                            ${gameData.current_turn === gameData.player1.id ? gameData.player1.username : gameData.player2.username}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="spectating-status" id="pvpSpectatingStatus">
+                    <i class="fas fa-eye"></i> Spectating 1v1 game in progress
+                </div>
+            </div>
+        </div>
+        <div class="spectating-stats">
+            <div class="stat-item">
+                <div class="stat-label">Grid Size</div>
+                <div class="stat-value">${gameData.grid_size}x${gameData.grid_size}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Mines</div>
+                <div class="stat-value">${gameData.mines_count}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Game State</div>
+                <div class="stat-value">${gameData.game_state === 'playing' ? 'In Progress' : 'Finished'}</div>
+            </div>
+            ${gameData.winner_id ? `
+                <div class="stat-item">
+                    <div class="stat-label">Winner</div>
+                    <div class="stat-value win">
+                        ${gameData.winner_id === gameData.player1.id ? gameData.player1.username : gameData.player2.username}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    spectatingContainer.style.display = 'block';
+    createPvPSpectatingGrid(gameData);
+}
+
+function createPvPSpectatingGrid(gameData) {
+    const grid = document.getElementById('pvpSpectatingGrid');
+    const totalCells = gameData.grid_size * gameData.grid_size;
+    
+    // Combine all revealed cells
+    const allRevealed = [...gameData.player1.revealed, ...gameData.player2.revealed];
+    const minesPositions = gameData.mines_positions || [];
+    
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = `repeat(${gameData.grid_size}, 1fr)`;
+    
+    for (let i = 0; i < totalCells; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'spectating-cell';
+        cell.dataset.index = i;
+        
+        if (allRevealed.includes(i)) {
+            if (minesPositions.includes(i)) {
+                // This is a mine that was hit
+                cell.classList.add('mine');
+                cell.innerHTML = '<i class="fas fa-bomb"></i>';
+                
+                // Check which player hit it
+                if (gameData.player1.revealed.includes(i)) {
+                    cell.title = `${gameData.player1.username} hit a mine!`;
+                } else if (gameData.player2.revealed.includes(i)) {
+                    cell.title = `${gameData.player2.username} hit a mine!`;
+                }
+            } else {
+                // Safe cell revealed
+                cell.classList.add('revealed');
+                cell.innerHTML = '<i class="fas fa-gem"></i>';
+                
+                // Color code based on which player revealed it
+                if (gameData.player1.revealed.includes(i)) {
+                    cell.style.backgroundColor = 'rgba(76, 201, 240, 0.2)';
+                    cell.title = `Revealed by ${gameData.player1.username}`;
+                } else if (gameData.player2.revealed.includes(i)) {
+                    cell.style.backgroundColor = 'rgba(247, 37, 133, 0.2)';
+                    cell.title = `Revealed by ${gameData.player2.username}`;
+                }
+            }
+        } else {
+            // Not revealed yet
+            cell.innerHTML = '<i class="fas fa-question"></i>';
+            cell.classList.add('hidden');
+        }
+        
+        grid.appendChild(cell);
+    }
 }
 
 
@@ -1841,12 +2284,25 @@ function checkURLForSpectate() {
 function startSpectatingFromURL(userId, gameType) {
     console.log('startSpectatingFromURL called with:', { userId, gameType });
     fetch('/api/players-in-game')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(players => {
             console.log('Players in game from API:', players);
+            
+            // Handle API error response
+            if (players.error) {
+                showToast('Error', 'Could not check player status', 'error', 3000);
+                return;
+            }
+            
             const playerInGame = players.find(p => 
                 p.user_id === userId && p.game_type === gameType.toLowerCase()
             );
+            
             if (playerInGame) {
                 console.log('Player found in game, starting spectate:', playerInGame);
                 startSpectating(userId, gameType.toLowerCase(), playerInGame.game_id);
