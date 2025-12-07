@@ -1880,51 +1880,175 @@ def get_players_in_game():
     if 'user_id' not in session:
         return jsonify({'error': 'not authenticated'}), 401
     
-    players_in_game = []
-    
-    for game_key, game_data in active_games.items():
-        # Skip if host is current user
-        if game_data['host_id'] == session['user_id']:
-            continue
+    try:
+        players_in_game = []
         
-        # Include mines AND slots games
-        if game_data['game_type'] not in ['mines', 'slots']:
-            continue
+        # Get PVP games from database
+        conn = get_db_connection()
         
-        # For slots games, check if they're still "spectatable"
-        if game_data['game_type'] == 'slots':
-            # Keep slots games active for 30 seconds after last spin
-            spectating_until = game_data.get('spectating_until', 0)
-            if time.time() > spectating_until:
-                continue  # Skip old slots games
+        # First, get active PVP games
+        try:
+            pvp_games = conn.execute('''
+                SELECT DISTINCT g.id as game_id, g.player1_id, g.player2_id, g.game_state,
+                       p1.username as player1_username, p2.username as player2_username,
+                       l.bet_amount, l.grid_size, l.mines_count,
+                       p1p.avatar as player1_avatar, p2p.avatar as player2_avatar
+                FROM pvp_games g
+                JOIN pvp_lobbies l ON g.lobby_id = l.id
+                JOIN users p1 ON g.player1_id = p1.id
+                JOIN users p2 ON g.player2_id = p2.id
+                LEFT JOIN profiles p1p ON p1.id = p1p.user_id
+                LEFT JOIN profiles p2p ON p2.id = p2p.user_id
+                WHERE g.game_state = 'playing'
+                AND (g.player1_id != ? OR g.player2_id != ?)  # Include games where user is not BOTH players
+                AND g.created_at > datetime('now', '-30 minutes')  # Only recent games
+                ORDER BY g.created_at DESC
+            ''', (session['user_id'], session['user_id'])).fetchall()
+        except Exception as e:
+            print(f"Error fetching PVP games: {e}")
+            pvp_games = []
         
-        # For mines games, check last update
-        elif game_data['game_type'] == 'mines':
-            if 'last_update' in game_data and time.time() - game_data['last_update'] > 120:
+        for pvp_game in pvp_games:
+            # Skip if current user is one of the players (already handled by query)
+            if session['user_id'] in [pvp_game['player1_id'], pvp_game['player2_id']]:
+                continue
+                
+            # Add both players to the list (or just one entry for the game)
+            players_in_game.append({
+                'user_id': pvp_game['player1_id'],  # Using player1 as "host" for spectating
+                'username': f"{pvp_game['player1_username']} vs {pvp_game['player2_username']}",
+                'avatar': pvp_game['player1_avatar'] or '/static/default-avatar.png',
+                'balance': 0,  # Not showing balance for PVP
+                'game_type': 'pvp',
+                'game_id': pvp_game['game_id'],
+                'is_pvp': True,
+                'opponent': pvp_game['player2_username'],
+                'player1_id': pvp_game['player1_id'],
+                'player2_id': pvp_game['player2_id']
+            })
+        
+        # Add existing mines/slots games from active_games
+        current_time = time.time()
+        for game_key, game_data in active_games.items():
+            try:
+                # Skip if host is current user
+                if game_data.get('host_id') == session['user_id']:
+                    continue
+                
+                # Include mines, slots, and pvp games
+                if game_data.get('game_type') not in ['mines', 'slots', 'pvp']:
+                    continue
+                
+                # Skip PVP games since we handle them from database
+                if game_data.get('game_type') == 'pvp':
+                    continue
+                
+                # For slots games, check if they're still "spectatable"
+                if game_data.get('game_type') == 'slots':
+                    spectating_until = game_data.get('spectating_until', 0)
+                    if current_time > spectating_until:
+                        continue  # Skip old slots games
+                
+                # For mines games, check last update
+                elif game_data.get('game_type') == 'mines':
+                    if 'last_update' in game_data and current_time - game_data['last_update'] > 300:  # 5 minutes
+                        continue
+                
+                # Get user info from database
+                user = conn.execute('''
+                    SELECT u.id, u.username, p.avatar, m.balance
+                    FROM users u
+                    LEFT JOIN profiles p ON u.id = p.user_id
+                    LEFT JOIN money m ON u.id = m.user_id
+                    WHERE u.id = ?
+                ''', (game_data['host_id'],)).fetchone()
+                
+                if user:
+                    players_in_game.append({
+                        'user_id': user['id'],
+                        'username': user['username'],
+                        'avatar': user['avatar'] if user['avatar'] else '/static/default-avatar.png',
+                        'balance': user['balance'] if user['balance'] else 0,
+                        'game_type': game_data['game_type'],
+                        'game_id': game_data['game_id'],
+                        'is_pvp': False
+                    })
+            except Exception as e:
+                print(f"Error processing game {game_key}: {e}")
                 continue
         
-        conn = get_db_connection()
-        user = conn.execute('''
-            SELECT u.id, u.username, p.avatar, m.balance
-            FROM users u
-            LEFT JOIN profiles p ON u.id = p.user_id
-            LEFT JOIN money m ON u.id = m.user_id
-            WHERE u.id = ?
-        ''', (game_data['host_id'],)).fetchone()
         conn.close()
         
-        if user:
-            players_in_game.append({
-                'user_id': user['id'],
-                'username': user['username'],
-                'avatar': user['avatar'] if user['avatar'] else '/static/default-avatar.png',
-                'balance': user['balance'] if user['balance'] else 0,
-                'game_type': game_data['game_type'],
-                'game_id': game_data['game_id']
-            })
-    
-    return jsonify(players_in_game)
+        return jsonify(players_in_game)
+        
+    except Exception as e:
+        print(f"Error in get_players_in_game: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
+@socketio.on('pvp_cell_revealed')
+def handle_pvp_cell_revealed(data):
+    """When a cell is revealed in PVP game, broadcast to spectators"""
+    game_id = data.get('game_id')
+    cell_index = data.get('cell_index')
+    result = data.get('result')
+    player_id = data.get('player_id')
+    next_turn = data.get('next_turn')
+    score = data.get('score')
+    game_ended = data.get('game_ended', False)
+    
+    # Update active games for PVP
+    game_key = f"pvp_{game_id}"
+    if game_key in active_games:
+        active_games[game_key]['last_update'] = time.time()
+        active_games[game_key]['current_turn'] = next_turn
+        
+        # Update score for the player who made the move
+        is_player1 = active_games[game_key]['player1_id'] == player_id
+        if is_player1:
+            active_games[game_key]['player1_score'] = score
+        else:
+            active_games[game_key]['player2_score'] = score
+    
+    # Broadcast to spectators
+    socketio.emit('pvp_spectator_update', {
+        'game_id': game_id,
+        'cell_index': cell_index,
+        'result': result,
+        'player_id': player_id,
+        'score': score,
+        'next_turn': next_turn,
+        'game_ended': game_ended
+    }, room=f'pvp_spectators_{game_id}')
+
+@socketio.on('pvp_game_ended')
+def handle_pvp_game_ended(data):
+    """When PVP game ends, notify spectators"""
+    game_id = data.get('game_id')
+    winner_id = data.get('winner_id')
+    winnings = data.get('winnings')
+    
+    game_key = f"pvp_{game_id}"
+    if game_key in active_games:
+        active_games[game_key]['game_state'] = 'finished'
+        active_games[game_key]['winner_id'] = winner_id
+        active_games[game_key]['finish_time'] = time.time()
+    
+    # Broadcast to spectators
+    socketio.emit('pvp_spectator_game_ended', {
+        'game_id': game_id,
+        'winner_id': winner_id,
+        'winnings': winnings
+    }, room=f'pvp_spectators_{game_id}')
+
+# Add socket event for joining spectator room
+@socketio.on('join_pvp_spectator')
+def handle_join_pvp_spectator(data):
+    """Join a PVP game spectator room"""
+    game_id = data.get('game_id')
+    if game_id:
+        join_room(f'pvp_spectators_{game_id}')
 
 @socketio.on('get_online_users')
 def handle_get_online_users():
@@ -1945,7 +2069,6 @@ def handle_request_game_status():
                 })
 
 
-
 @app.route('/api/spectate/start', methods=['POST'])
 def start_spectating():
     if 'user_id' not in session:
@@ -1959,14 +2082,60 @@ def start_spectating():
     if host_id == session['user_id']:
         return jsonify({'success': False, 'message': 'Cannot spectate yourself'})
     
-    game_key = f"{game_type}_{game_id}"
-    if game_key not in active_games:
-        return jsonify({'success': False, 'message': 'Game not found or has ended'})
-    
-    if session['user_id'] in active_games[game_key]['spectators']:
-        return jsonify({'success': False, 'message': 'Already spectating this game'})
-    
-    active_games[game_key]['spectators'].append(session['user_id'])
+    # Handle different game types
+    if game_type == 'pvp':
+        game_key = f"pvp_{game_id}"
+        
+        # Check if this PVP game exists in database
+        conn = get_db_connection()
+        pvp_game = conn.execute('''
+            SELECT g.*, l.bet_amount, l.grid_size, l.mines_count,
+                   p1.username as player1_username, p2.username as player2_username
+            FROM pvp_games g
+            JOIN pvp_lobbies l ON g.lobby_id = l.id
+            JOIN users p1 ON g.player1_id = p1.id
+            JOIN users p2 ON g.player2_id = p2.id
+            WHERE g.id = ?
+        ''', (game_id,)).fetchone()
+        conn.close()
+        
+        if not pvp_game:
+            return jsonify({'success': False, 'message': 'PVP game not found'})
+        
+        # Add to active games for spectating
+        if game_key not in active_games:
+            active_games[game_key] = {
+                'host_id': host_id,
+                'game_type': 'pvp',
+                'game_id': game_id,
+                'player1_id': pvp_game['player1_id'],
+                'player2_id': pvp_game['player2_id'],
+                'player1_username': pvp_game['player1_username'],
+                'player2_username': pvp_game['player2_username'],
+                'bet_amount': pvp_game['bet_amount'],
+                'grid_size': pvp_game['grid_size'],
+                'mines_count': pvp_game['mines_count'],
+                'current_turn': pvp_game['current_turn'],
+                'game_state': pvp_game['game_state'],
+                'spectators': [],
+                'last_update': time.time()
+            }
+        
+        if session['user_id'] in active_games[game_key]['spectators']:
+            return jsonify({'success': False, 'message': 'Already spectating this game'})
+        
+        active_games[game_key]['spectators'].append(session['user_id'])
+        
+    else:
+        # Existing mines/slots game handling...
+        game_key = f"{game_type}_{game_id}"
+        if game_key not in active_games:
+            return jsonify({'success': False, 'message': 'Game not found or has ended'})
+        
+        if session['user_id'] in active_games[game_key]['spectators']:
+            return jsonify({'success': False, 'message': 'Already spectating this game'})
+        
+        active_games[game_key]['spectators'].append(session['user_id'])
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2149,38 +2318,120 @@ def get_game_data():
     if 'user_id' not in session:
         return jsonify({'error': 'not authenticated'}), 401
     
-    game_type = request.args.get('game_type')
-    game_id = request.args.get('game_id')
-    
-    game_key = f"{game_type}_{game_id}"
-    if game_key not in active_games:
-        return jsonify({'success': False, 'message': 'Game not found'})
-    
-    game_data = active_games[game_key]
-    
-    if session['user_id'] not in game_data['spectators'] and session['user_id'] != game_data['host_id']:
-        return jsonify({'success': False, 'message': 'Not authorized to view this game'})
-    
-    conn = get_db_connection()
-    host = conn.execute('''
-        SELECT u.username, p.avatar, m.balance
-        FROM users u
-        LEFT JOIN profiles p ON u.id = p.user_id
-        LEFT JOIN money m ON u.id = m.user_id
-        WHERE u.id = ?
-    ''', (game_data['host_id'],)).fetchone()
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'game_data': {
-            **game_data,
-            'host_username': host['username'],
-            'host_avatar': host['avatar'] if host['avatar'] else '/static/default-avatar.png',
-            'host_balance': host['balance'] if host['balance'] else 0
-        }
-    })
-
+    try:
+        game_type = request.args.get('game_type')
+        game_id = request.args.get('game_id')
+        
+        if not game_type or not game_id:
+            return jsonify({'success': False, 'message': 'Missing parameters'})
+        
+        if game_type == 'pvp':
+            # For PVP games, get data from database
+            conn = get_db_connection()
+            pvp_game = conn.execute('''
+                SELECT g.*, l.bet_amount, l.grid_size, l.mines_count,
+                       p1.username as player1_username, p2.username as player2_username,
+                       p1p.avatar as player1_avatar, p2p.avatar as player2_avatar,
+                       m1.balance as player1_balance, m2.balance as player2_balance
+                FROM pvp_games g
+                JOIN pvp_lobbies l ON g.lobby_id = l.id
+                JOIN users p1 ON g.player1_id = p1.id
+                JOIN users p2 ON g.player2_id = p2.id
+                LEFT JOIN profiles p1p ON p1.id = p1p.user_id
+                LEFT JOIN profiles p2p ON p2.id = p2p.user_id
+                LEFT JOIN money m1 ON p1.id = m1.user_id
+                LEFT JOIN money m2 ON p2.id = m2.user_id
+                WHERE g.id = ?
+            ''', (game_id,)).fetchone()
+            conn.close()
+            
+            if not pvp_game:
+                return jsonify({'success': False, 'message': 'Game not found'})
+            
+            # Parse revealed cells safely
+            def parse_cell_string(cell_str):
+                if not cell_str or cell_str.strip() == '':
+                    return []
+                try:
+                    return [int(x.strip()) for x in cell_str.split(',') if x.strip().isdigit()]
+                except:
+                    return []
+            
+            player1_revealed = parse_cell_string(pvp_game['player1_revealed'])
+            player2_revealed = parse_cell_string(pvp_game['player2_revealed'])
+            mines_positions = parse_cell_string(pvp_game['mines_positions'])
+            
+            game_data = {
+                'game_type': 'pvp',
+                'game_id': game_id,
+                'player1': {
+                    'id': pvp_game['player1_id'],
+                    'username': pvp_game['player1_username'],
+                    'avatar': pvp_game['player1_avatar'] or '/static/default-avatar.png',
+                    'balance': pvp_game['player1_balance'] or 0,
+                    'revealed': player1_revealed,
+                    'score': pvp_game['player1_score'] or 0
+                },
+                'player2': {
+                    'id': pvp_game['player2_id'],
+                    'username': pvp_game['player2_username'],
+                    'avatar': pvp_game['player2_avatar'] or '/static/default-avatar.png',
+                    'balance': pvp_game['player2_balance'] or 0,
+                    'revealed': player2_revealed,
+                    'score': pvp_game['player2_score'] or 0
+                },
+                'current_turn': pvp_game['current_turn'],
+                'bet_amount': pvp_game['bet_amount'],
+                'grid_size': pvp_game['grid_size'],
+                'mines_count': pvp_game['mines_count'],
+                'game_state': pvp_game['game_state'],
+                'winner_id': pvp_game['winner_id'],
+                'mines_positions': mines_positions
+            }
+            
+            return jsonify({
+                'success': True,
+                'game_data': game_data
+            })
+        
+        else:
+            # Existing mines/slots handling...
+            game_key = f"{game_type}_{game_id}"
+            if game_key not in active_games:
+                return jsonify({'success': False, 'message': 'Game not found'})
+            
+            game_data = active_games[game_key]
+            
+            # Allow spectating if user is in spectators list OR is the host
+            if (session['user_id'] not in game_data.get('spectators', []) and 
+                session['user_id'] != game_data.get('host_id')):
+                return jsonify({'success': False, 'message': 'Not authorized to view this game'})
+            
+            conn = get_db_connection()
+            host = conn.execute('''
+                SELECT u.username, p.avatar, m.balance
+                FROM users u
+                LEFT JOIN profiles p ON u.id = p.user_id
+                LEFT JOIN money m ON u.id = m.user_id
+                WHERE u.id = ?
+            ''', (game_data['host_id'],)).fetchone()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'game_data': {
+                    **game_data,
+                    'host_username': host['username'],
+                    'host_avatar': host['avatar'] if host['avatar'] else '/static/default-avatar.png',
+                    'host_balance': host['balance'] if host['balance'] else 0
+                }
+            })
+            
+    except Exception as e:
+        print(f"Error in get_game_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Internal server error: {str(e)}'}), 500
 @socketio.on('connect')
 def handle_connect():
     if 'user_id' in session:
@@ -2266,165 +2517,110 @@ def handle_pvp_move(data):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Get game info with lobby data
-    game = conn.execute('''
-        SELECT g.*, l.grid_size, l.mines_count, l.bet_amount
-        FROM pvp_games g
-        JOIN pvp_lobbies l ON g.lobby_id = l.id
-        WHERE g.id = ?
-    ''', (game_id,)).fetchone()
-    
-    if not game:
-        conn.close()
-        emit('pvp_error', {'message': 'Game not found'}, room=request.sid)
-        return
-    
-    if game['game_state'] != 'playing':
-        conn.close()
-        emit('pvp_error', {'message': 'Game already finished'}, room=request.sid)
-        return
-    
-    if game['current_turn'] != user_id:
-        conn.close()
-        emit('pvp_error', {'message': 'Not your turn'}, room=request.sid)
-        return
-    
-    # Determine which player
-    is_player1 = game['player1_id'] == user_id
-    revealed_field = 'player1_revealed' if is_player1 else 'player2_revealed'
-    score_field = 'player1_score' if is_player1 else 'player2_score'
-    opponent_field = 'player2_revealed' if is_player1 else 'player1_revealed'
-    
-    # Process move
-    revealed_str = game[revealed_field] or ''
-    revealed = [int(x) for x in revealed_str.split(',') if x]
-    
-    if cell_index in revealed:
-        conn.close()
-        emit('pvp_error', {'message': 'Cell already revealed'}, room=request.sid)
-        return
-    
-    mines_positions = [int(x) for x in game['mines_positions'].split(',') if x]
-    
-    # Add to revealed cells
-    revealed.append(cell_index)
-    revealed_str = ','.join(map(str, revealed))
-    
-    # Get usernames for both players
-    player1 = conn.execute('SELECT username FROM users WHERE id = ?', (game['player1_id'],)).fetchone()
-    player2 = conn.execute('SELECT username FROM users WHERE id = ?', (game['player2_id'],)).fetchone()
-    
-    player1_username = player1['username'] if player1 else 'Player 1'
-    player2_username = player2['username'] if player2 else 'Player 2'
-    
-    # Check if hit mine
-    if cell_index in mines_positions:
-        # Player loses - END GAME
-        winner_id = game['player2_id'] if is_player1 else game['player1_id']
-        loser_id = user_id
-        
-        # Update game state
-        cursor.execute(f'''
-            UPDATE pvp_games 
-            SET {revealed_field} = ?, 
-                game_state = 'finished', 
-                winner_id = ?
-            WHERE id = ?
-        ''', (revealed_str, winner_id, game_id))
-        
-        # Pay out winner (2x bet amount - winner gets both bets)
-        winnings = game['bet_amount'] * 2
-        cursor.execute('UPDATE money SET balance = balance + ? WHERE user_id = ?',
-                     (winnings, winner_id))
-        
-        conn.commit()
-        
-        # Get all mines positions
-        all_mines = [int(x) for x in game['mines_positions'].split(',') if x]
-        
-        # Get final game state with both players' revealed cells
-        final_game = conn.execute('''
-            SELECT g.*, l.grid_size, l.mines_count, l.bet_amount
+    try:
+        # Get game info with lobby data
+        game = conn.execute('''
+            SELECT g.*, l.grid_size, l.mines_count, l.bet_amount,
+                   l.host_id, l.guest_id
             FROM pvp_games g
             JOIN pvp_lobbies l ON g.lobby_id = l.id
             WHERE g.id = ?
         ''', (game_id,)).fetchone()
         
-        # Prepare final state data
-        final_data = {
-            'player1_revealed': final_game['player1_revealed'].split(',') if final_game['player1_revealed'] else [],
-            'player2_revealed': final_game['player2_revealed'].split(',') if final_game['player2_revealed'] else [],
-            'player1_score': final_game['player1_score'],
-            'player2_score': final_game['player2_score'],
-            'game_state': 'finished'
-        }
+        if not game:
+            emit('pvp_error', {'message': 'Game not found'}, room=request.sid)
+            return
         
-        # Send SINGLE game end event with all data
-        socketio.emit('pvp_game_ended', {
-            'game_id': game_id,
-            'winner_id': winner_id,
-            'winnings': winnings,
-            'cell_index': cell_index,
-            'mine_hit_by': loser_id,
-            'all_mines': all_mines,
-            'final_game': final_data,
-            'player1_username': player1_username,
-            'player2_username': player2_username,
-            'reason': 'mine_hit'
-        }, room=f'pvp_game_{game_id}')
+        if game['game_state'] != 'playing':
+            emit('pvp_error', {'message': 'Game already finished'}, room=request.sid)
+            return
         
-        conn.close()
-        return  # Exit early - game ended
+        if game['current_turn'] != user_id:
+            emit('pvp_error', {'message': 'Not your turn'}, room=request.sid)
+            return
         
-    else:
-        # Safe cell, add score
-        new_score = game[score_field] + 1
-        next_turn = game['player2_id'] if is_player1 else game['player1_id']
+        # Determine which player
+        is_player1 = game['player1_id'] == user_id
+        revealed_field = 'player1_revealed' if is_player1 else 'player2_revealed'
+        score_field = 'player1_score' if is_player1 else 'player2_score'
         
-        # Update game state
-        cursor.execute(f'''
-            UPDATE pvp_games 
-            SET {revealed_field} = ?, {score_field} = ?, current_turn = ?
-            WHERE id = ?
-        ''', (revealed_str, new_score, next_turn, game_id))
+        # Process move
+        revealed_str = game[revealed_field] or ''
+        revealed = [int(x) for x in revealed_str.split(',') if x]
         
-        # Get updated game state
-        updated_game = conn.execute('''
-            SELECT g.*, l.grid_size, l.mines_count, l.bet_amount
-            FROM pvp_games g
-            JOIN pvp_lobbies l ON g.lobby_id = l.id
-            WHERE g.id = ?
-        ''', (game_id,)).fetchone()
+        if cell_index in revealed:
+            emit('pvp_error', {'message': 'Cell already revealed'}, room=request.sid)
+            return
         
-        # Check for win condition (score-based win)
-        target_score = 5  # First to 5 points wins
+        mines_positions = [int(x) for x in game['mines_positions'].split(',') if x]
         
-        game_ended = False
-        winner_id = None
+        # Add to revealed cells
+        revealed.append(cell_index)
+        revealed_str = ','.join(map(str, revealed))
         
-        if updated_game['player1_score'] >= target_score:
-            winner_id = updated_game['player1_id']
-            game_ended = True
-        elif updated_game['player2_score'] >= target_score:
-            winner_id = updated_game['player2_id']
-            game_ended = True
+        # Get usernames for both players
+        player1 = conn.execute('SELECT username FROM users WHERE id = ?', (game['player1_id'],)).fetchone()
+        player2 = conn.execute('SELECT username FROM users WHERE id = ?', (game['player2_id'],)).fetchone()
         
-        if game_ended:
-            # Update final game state
-            cursor.execute('''
-                UPDATE pvp_games 
-                SET game_state = 'finished', winner_id = ?
-                WHERE id = ?
-            ''', (winner_id, game_id))
+        player1_username = player1['username'] if player1 else 'Player 1'
+        player2_username = player2['username'] if player2 else 'Player 2'
+        
+        # Check if hit mine
+        if cell_index in mines_positions:
+            # Player loses - END GAME
+            winner_id = game['player2_id'] if is_player1 else game['player1_id']
+            loser_id = user_id
             
-            # Pay out winner
-            winnings = updated_game['bet_amount'] * 2
-            cursor.execute('UPDATE money SET balance = balance + ? WHERE user_id = ?',
-                         (winnings, winner_id))
+            # Update game state
+            cursor.execute(f'''
+                UPDATE pvp_games 
+                SET {revealed_field} = ?, 
+                    game_state = 'finished', 
+                    winner_id = ?
+                WHERE id = ?
+            ''', (revealed_str, winner_id, game_id))
+            
+            # ALSO update the lobby status
+            cursor.execute('''
+                UPDATE pvp_lobbies 
+                SET status = 'finished'
+                WHERE id = ?
+            ''', (game['lobby_id'],))
+            
+            # Pay out winner (2x bet amount - winner gets both bets)
+            winnings = game['bet_amount'] * 2
+            
+            # Get current balance of winner to verify
+            winner_money = conn.execute('SELECT balance FROM money WHERE user_id = ?', 
+                                       (winner_id,)).fetchone()
+            
+            if winner_money:
+                cursor.execute('UPDATE money SET balance = balance + ? WHERE user_id = ?',
+                             (winnings, winner_id))
+            else:
+                # Create money record if it doesn't exist
+                cursor.execute('INSERT INTO money (user_id, balance) VALUES (?, ?)',
+                             (winner_id, winnings))
+            
+            # Also update loser's money record (they already lost their bet when game started)
+            loser_money = conn.execute('SELECT balance FROM money WHERE user_id = ?', 
+                                      (loser_id,)).fetchone()
+            if not loser_money:
+                cursor.execute('INSERT INTO money (user_id, balance) VALUES (?, ?)',
+                             (loser_id, 0))
             
             conn.commit()
             
-            # Get final state
+            # Get updated balances for both players
+            winner_new_balance = conn.execute('SELECT balance FROM money WHERE user_id = ?', 
+                                            (winner_id,)).fetchone()
+            loser_new_balance = conn.execute('SELECT balance FROM money WHERE user_id = ?', 
+                                           (loser_id,)).fetchone()
+            
+            # Get all mines positions
+            all_mines = [int(x) for x in game['mines_positions'].split(',') if x]
+            
+            # Get final game state with both players' revealed cells
             final_game = conn.execute('''
                 SELECT g.*, l.grid_size, l.mines_count, l.bet_amount
                 FROM pvp_games g
@@ -2432,6 +2628,7 @@ def handle_pvp_move(data):
                 WHERE g.id = ?
             ''', (game_id,)).fetchone()
             
+            # Prepare final state data
             final_data = {
                 'player1_revealed': final_game['player1_revealed'].split(',') if final_game['player1_revealed'] else [],
                 'player2_revealed': final_game['player2_revealed'].split(',') if final_game['player2_revealed'] else [],
@@ -2440,43 +2637,58 @@ def handle_pvp_move(data):
                 'game_state': 'finished'
             }
             
-            # Send game end event
+            # Send SINGLE game end event with all data including balances
             socketio.emit('pvp_game_ended', {
                 'game_id': game_id,
                 'winner_id': winner_id,
                 'winnings': winnings,
+                'cell_index': cell_index,
+                'mine_hit_by': loser_id,
+                'all_mines': all_mines,
                 'final_game': final_data,
                 'player1_username': player1_username,
                 'player2_username': player2_username,
-                'reason': 'score_win'
+                'winner_new_balance': winner_new_balance['balance'] if winner_new_balance else winnings,
+                'loser_new_balance': loser_new_balance['balance'] if loser_new_balance else 0,
+                'reason': 'mine_hit'
             }, room=f'pvp_game_{game_id}')
             
-            # Also send a cell revealed event for UI update
-            socketio.emit('pvp_cell_revealed', {
-                'game_id': game_id,
-                'cell_index': cell_index,
-                'result': 'safe',
-                'player_id': user_id,
-                'score': new_score,
-                'next_turn': next_turn,
-                'game_ended': True,
-                'updated_game': {
-                    'player1_revealed': updated_game['player1_revealed'].split(',') if updated_game['player1_revealed'] else [],
-                    'player2_revealed': updated_game['player2_revealed'].split(',') if updated_game['player2_revealed'] else [],
-                    'player1_score': updated_game['player1_score'],
-                    'player2_score': updated_game['player2_score'],
-                    'current_turn': updated_game['current_turn'],
-                    'game_state': 'finished'
-                }
-            }, room=f'pvp_game_{game_id}')
+            # Also send balance updates to both players individually
+            if winner_new_balance:
+                socketio.emit('balance_update', {
+                    'user_id': winner_id,
+                    'new_balance': winner_new_balance['balance']
+                }, room=f'user_{winner_id}')
             
-            conn.close()
-            return
-        
+            if loser_new_balance:
+                socketio.emit('balance_update', {
+                    'user_id': loser_id,
+                    'new_balance': loser_new_balance['balance']
+                }, room=f'user_{loser_id}')
+            
         else:
+            # Safe cell, add score
+            new_score = game[score_field] + 1
+            next_turn = game['player2_id'] if is_player1 else game['player1_id']
+            
+            # Update game state
+            cursor.execute(f'''
+                UPDATE pvp_games 
+                SET {revealed_field} = ?, {score_field} = ?, current_turn = ?
+                WHERE id = ?
+            ''', (revealed_str, new_score, next_turn, game_id))
+            
             conn.commit()
             
-            # Send SINGLE cell revealed event (no game end)
+            # Get updated game state
+            updated_game = conn.execute('''
+                SELECT g.*, l.grid_size, l.mines_count, l.bet_amount
+                FROM pvp_games g
+                JOIN pvp_lobbies l ON g.lobby_id = l.id
+                WHERE g.id = ?
+            ''', (game_id,)).fetchone()
+            
+            # Send SINGLE cell revealed event
             socketio.emit('pvp_cell_revealed', {
                 'game_id': game_id,
                 'cell_index': cell_index,
@@ -2494,10 +2706,15 @@ def handle_pvp_move(data):
                     'game_state': 'playing'
                 }
             }, room=f'pvp_game_{game_id}')
-            
-            conn.close()
-            return
-
+        
+    except Exception as e:
+        print(f"Error in handle_pvp_move: {e}")
+        import traceback
+        traceback.print_exc()
+        emit('pvp_error', {'message': f'Server error: {str(e)}'}, room=request.sid)
+    
+    finally:
+        conn.close()
 @socketio.on('private_message')
 def handle_private_message(data):
     sender_id = session['user_id']
