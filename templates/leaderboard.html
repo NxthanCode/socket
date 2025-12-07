@@ -18,10 +18,10 @@
                 <a href="/profile" class="nav-link">
                     <i class="fas fa-user"></i> profile
                 </a>
-                <a href="/players" class="nav-link active">
+                <a href="/players" class="nav-link">
                     <i class="fas fa-users"></i> players
                 </a>
-                <a href="/leaderboard" class="nav-link">
+                <a href="/leaderboard" class="nav-link active">
                     <i class="fas fa-trophy"></i> leaderboard
                 </a>
                 <a href="/games" class="nav-link">
@@ -40,28 +40,27 @@
         </header>
         
         <main class="main-content">
-            <div class="players-container">
-                <div class="players-header">
-                    <h1><i class="fas fa-users"></i> players</h1>
+            <div class="leaderboard-page">
+                <div class="leaderboard-header-main">
+                    <h1><i class="fas fa-trophy"></i> leaderboard</h1>
+                    <p>top players by balance</p>
                 </div>
                 
-                <div class="players-filters">
-                    <div class="filter-group">
-                        <button class="filter-btn active" data-filter="all">players</button>
-                        <button class="filter-btn" data-filter="online">online</button>
-                        <button class="filter-btn" data-filter="ingame">in game</button>
-                        <button class="filter-btn" data-filter="offline">offline</button>
+                <div class="leaderboard-container-main">
+                    <div class="leaderboard-header">
+                        <div class="leaderboard-title">
+                            <i class="fas fa-crown"></i> top players
+                        </div>
+                        <button class="refresh-btn" id="refreshLeaderboard">
+                            <i class="fas fa-redo"></i> refresh
+                        </button>
                     </div>
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="playerSearch" placeholder="search players...">
-                    </div>
-                </div>
-                
-                <div class="players-grid" id="playersGrid">
-                    <div class="loading-players">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>loading players..</p>
+                    
+                    <div class="leaderboard-grid" id="leaderboardGrid">
+                        <div class="loading-leaderboard">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>loading leaderboard..</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -71,11 +70,10 @@
             <p></p>
         </footer>
     </div>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.js"></script>
-    <script src="/static/js/players.js"></script>
     <script src="/static/js/header.js"></script>
-    <script src="/static/js/global-notifications.js"></script>
+    <script src="/static/js/leaderboard.js"></script>
     <script src="/static/js/profile-modal.js"></script>
+    <script src="/static/js/global-notifications.js"></script> 
 </body>
 </html>

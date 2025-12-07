@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-dice"></i>
+                <span>Socket Gambling</span>
+            </div>
+            <nav class="nav">
+                <a href="/profile" class="nav-link">
+                    <i class="fas fa-user"></i> profile
+                </a>
+                <a href="/players" class="nav-link">
+                    <i class="fas fa-users"></i> players
+                </a>
+                <a href="/leaderboard" class="nav-link">
+                    <i class="fas fa-trophy"></i> leaderboard
+                </a>
+                <a href="/games" class="nav-link">
+                    <i class="fas fa-gamepad"></i> games
+                </a>
+                <a href="/pvp" class="nav-link active">
+                    <i class="fa-solid fa-user-ninja"></i> Custom Lobby
+                </a>
+                <a href="/messages" class="nav-link">
+                    <i class="fas fa-comments"></i> messages
+                </a>
+                <a href="/logout" class="nav-link">
+                    <i class="fas fa-sign-out-alt"></i> logout
+                </a>
+            </nav>
+        </header>
+        
+        <main class="main-content">
+            <div id="lobbyView" class="pvp-container">
+                <div class="pvp-header">
+                    <h1><i class="fas fa-swords"></i> Custom Lobby</h1>
+                    <button class="btn btn-primary" id="createChallengeBtn">
+                        <i class="fas fa-plus"></i> Challenge Player
+                    </button>
+                </div>
+
+                <div class="pvp-tabs">
+                    <button class="pvp-tab active" data-tab="lobbies">
+                        <i class="fas fa-list"></i> Open Lobbies
+                    </button>
+                    <button class="pvp-tab" data-tab="invites">
+                        <i class="fas fa-envelope"></i> Invites
+                        <span class="badge" id="invitesBadge">0</span>
+                    </button>
+                    <button class="pvp-tab" data-tab="active">
+                        <i class="fas fa-gamepad"></i> My Games
+                    </button>
+                </div>
+
+                <div class="tab-content active" id="lobbiesTab">
+                    <div class="lobbies-grid" id="lobbiesGrid">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading lobbies...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="invitesTab">
+                    <div id="invitesContainer">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading invites...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="activeTab">
+                    <div id="activeGamesContainer">
+                        <div class="no-data">
+                            <i class="fas fa-gamepad"></i>
+                            <h3>No active games</h3>
+                            <p>Challenge a player to start!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="gameView" class="hidden">
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p></p>
+        </footer>
+    </div>
+
+    <div class="modal" id="createModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus-circle"></i> Create Challenge</h3>
+                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label><i class="fas fa-dollar-sign"></i> Bet Amount</label>
+                    <input type="number" id="betAmount" class="control-input" value="10" min="1" max="1000">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-th-large"></i> Grid Size</label>
+                    <select id="gridSize" class="control-input">
+                        <option value="3">3x3</option>
+                        <option value="5" selected>5x5</option>
+                        <option value="8">8x8</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-bomb"></i> Mines Count</label>
+                    <input type="number" id="minesCount" class="control-input" value="5" min="1" max="20">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-users"></i> Select Opponent</label>
+                    <div class="players-select-grid" id="playersSelect">
+                        <div class="loading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 20px;" onclick="sendChallenge()">
+                    <i class="fas fa-paper-plane"></i> Send Challenge
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.js"></script>
+    <script src="/static/js/header.js"></script>
+    <script src="/static/js/pvp.js"></script>
+    <script src="/static/js/global-notifications.js"></script>
+    <script src="/static/js/profile-modal.js"></script>
+</body>
+</html>

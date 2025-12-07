@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-dice"></i>
+                <span>Socket Gambling</span>
+            </div>
+            <nav class="nav">
+                <a href="/profile" class="nav-link">
+                    <i class="fas fa-user"></i> profile
+                </a>
+                <a href="/players" class="nav-link">
+                    <i class="fas fa-users"></i> players
+                </a>
+                <a href="/leaderboard" class="nav-link">
+                    <i class="fas fa-trophy"></i> leaderboard
+                </a>
+                <a href="/games" class="nav-link active">
+                    <i class="fas fa-gamepad"></i> games
+                </a>
+                <a href="/pvp" class="nav-link">
+                    <i class="fa-solid fa-user-ninja"></i> Custom Lobby
+                </a>
+                <a href="/messages" class="nav-link">
+                    <i class="fas fa-comments"></i> messages
+                </a>
+                <a href="/logout" class="nav-link">
+                    <i class="fas fa-sign-out-alt"></i> logout
+                </a>
+            </nav>
+        </header>
+        
+        <main class="main-content">
+            <div id="mainGamesContainer">
+                <div class="games-container" id="gamesContainer">
+                    <div class="games-header">
+                        <h1><i class="fas fa-gamepad"></i> games</h1>
+                    </div>
+                    
+                    <div class="game-categories">
+                        <div class="category-tab active" data-category="classic">
+                            <i class="fas fa-dice"></i> classic
+                        </div>
+                        <div class="category-tab" data-category="slots">
+                            <i class="fas fa-slot-machine"></i> slots
+                        </div>
+                        <div class="category-tab" data-category="live">
+                            <i class="fas fa-broadcast-tower"></i> live
+                        </div>
+                        <div class="category-tab" data-category="table">
+                            <i class="fas fa-table"></i> table
+                        </div>
+                        <div class="category-tab" data-category="cards">
+                            <i class="fas fa-clubs"></i> cards
+                        </div>
+                        <div class="category-tab" data-category="wheel">
+                            <i class="fas fa-redo"></i> wheel
+                        </div>
+                        <div class="category-tab" data-category="puzzle">
+                            <i class="fas fa-puzzle-piece"></i> puzzle
+                        </div>
+                        <div class="category-tab" data-category="numbers">
+                            <i class="fas fa-sort-numeric-up"></i> numbers
+                        </div>
+                        <div class="category-tab" data-category="instant">
+                            <i class="fas fa-bolt"></i> instant
+                        </div>
+                    </div>
+                    
+                    <div class="category-content active" id="classicGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-dice"></i> classic games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card" id="minesCard">
+                                <div class="game-header">
+                                    <div class="game-icon">
+                                        <i class="fas fa-bomb"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Mines</div>
+                                        <div class="game-description">find the safe spots and avoid mines</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" onclick="loadMinesGame()">
+                                    <i class="fas fa-play"></i> play
+                                </button>
+                            </div>
+                            
+                            <div class="game-card" id="crashCard">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #4cc9f0, #4361ee);">
+                                        <i class="fas fa-plane"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">crash</div>
+                                        <div class="game-description">fly the plane and cash out before it crashes</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" onclick="loadCrashGame()">
+                                    <i class="fas fa-play"></i> play
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #7209b7, #560bad);">
+                                        <i class="fas fa-dice"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Dice</div>
+                                        <div class="game-description">roll the dice and test youre luck</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #ff9e00, #ff9100);">
+                                        <i class="fas fa-coins"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Coin Flip</div>
+                                        <div class="game-description">50/50 coin flip with double or nothing</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="slotsGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-slot-machine"></i> slot games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8e53);">
+                                        <i class="fas fa-gem"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Slots</div>
+                                        <div class="game-description">3-reel classic slots with huge jackpot!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" onclick="loadSlotsGame()">
+                                    <i class="fas fa-play"></i> play
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #00b4d8, #0096c7);">
+                                        <i class="fas fa-fish"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Ocean Fortune</div>
+                                        <div class="game-description">5-reel underwater adventure with wild symbols!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="liveGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-broadcast-tower"></i> live games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #f72585, #b5179e);">
+                                        <i class="fas fa-roulette"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Live Roulette</div>
+                                        <div class="game-description">Real-time roulette with live dealers!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #38b000, #2d9100);">
+                                        <i class="fas fa-horse-head"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Live Poker</div>
+                                        <div class="game-description">Texas Hold'em with live players and dealers!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="tableGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-table"></i> table games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #9d4edd, #7b2cbf);">
+                                        <i class="fas fa-chess-board"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Blackjack</div>
+                                        <div class="game-description">Classic 21 against the dealer!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #ff5400, #e85d04);">
+                                        <i class="fas fa-chess-rook"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Roulette</div>
+                                        <div class="game-description">Spin the wheel and place your bets!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="cardsGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-clubs"></i> card games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #dc2f02, #d00000);">
+                                        <i class="fas fa-heart"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Poker</div>
+                                        <div class="game-description">Classic Texas Hold'em poker!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #0077b6, #023e8a);">
+                                        <i class="fas fa-spade"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Blackjack</div>
+                                        <div class="game-description">Beat the dealer without going over 21!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="wheelGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-redo"></i> wheel games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #ff9e00, #ff9100);">
+                                        <i class="fas fa-wheel"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Wheel of Fortune</div>
+                                        <div class="game-description">Spin the wheel for huge multipliers!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #7209b7, #560bad);">
+                                        <i class="fas fa-compact-disc"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Spin & Win</div>
+                                        <div class="game-description">Simple spin game with instant rewards!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="puzzleGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-puzzle-piece"></i> puzzle games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #38b000, #2d9100);">
+                                        <i class="fas fa-th"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Grid Puzzle</div>
+                                        <div class="game-description">Solve puzzles to win rewards!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #00b4d8, #0096c7);">
+                                        <i class="fas fa-shapes"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Match 3</div>
+                                        <div class="game-description">Classic match 3 game with betting!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="numbersGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-sort-numeric-up"></i> number games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #9d4edd, #7b2cbf);">
+                                        <i class="fas fa-hashtag"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Number Guess</div>
+                                        <div class="game-description">Guess the number for big rewards!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #ff5400, #e85d04);">
+                                        <i class="fas fa-calculator"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Lucky Numbers</div>
+                                        <div class="game-description">Pick your lucky numbers!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="category-content" id="instantGames">
+                        <h2 class="category-title">
+                            <i class="fas fa-bolt"></i> instant games
+                        </h2>
+                        <div class="games-grid">
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8e53);">
+                                        <i class="fas fa-bolt"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Instant Win</div>
+                                        <div class="game-description">Instant scratch card style game!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                            
+                            <div class="game-card">
+                                <div class="game-header">
+                                    <div class="game-icon" style="background: linear-gradient(135deg, #f72585, #b5179e);">
+                                        <i class="fas fa-gift"></i>
+                                    </div>
+                                    <div class="game-info">
+                                        <div class="game-name">Quick Draw</div>
+                                        <div class="game-description">Fast-paced instant win game!</div>
+                                    </div>
+                                </div>
+                                <button class="play-btn" disabled>
+                                    <i class="fas fa-clock"></i> coming soon
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="minesGameContainer" class="hidden">
+                </div>
+                
+                <div id="crashGameContainer" class="hidden">
+                </div>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p></p>
+        </footer>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.js"></script>
+    <script src="/static/js/header.js"></script>
+    <script src="/static/js/games.js"></script>
+    <script src ="/static/js/slots.js"></script>
+    <script src="/static/js/global-notifications.js"></script> 
+    <script src="/static/js/profile-modal.js"></script>
+</body>
+</html>
